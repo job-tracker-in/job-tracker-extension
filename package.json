@@ -2,8 +2,8 @@
   "name": "job-tracker-extension",
   "displayName": "Job tracker extension",
   "version": "0.0.1",
-  "description": "A basic Plasmo extension.",
-  "author": "Plasmo Corp. <foss@plasmo.com>",
+  "description": "Save LinkedIn job listings to job-tracker.in in one click. Auto-fills job title, company, and location.",
+  "author": "krkzero9",
   "scripts": {
     "dev": "plasmo dev",
     "build": "plasmo build",
@@ -24,8 +24,14 @@
     "typescript": "5.3.3"
   },
   "manifest": {
+    "permissions": [
+      "activeTab",
+      "storage"
+    ],
     "host_permissions": [
-      "https://*/*"
+      "https://www.linkedin.com/*",
+      "https://job-tracker.in/*",
+      "https://api.job-tracker.in/*"
     ]
   }
 }
