@@ -80,6 +80,23 @@ function getJobData() {
   }
 }
 
+function getJobDescription(): string {
+  const selectors = [
+    ".jobs-description__content .jobs-box__html-content",
+    ".jobs-description-content__text",
+    "#job-details",
+    ".description__text",
+    '[class*="jobs-description"] [class*="content"]',
+  ]
+  for (const sel of selectors) {
+    const el = document.querySelector(sel)
+    if (el?.textContent?.trim()) {
+      return el.textContent.trim().replace(/\s+/g, " ").substring(0, 3000)
+    }
+  }
+  return ""
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "getJobData") {
     let attempts = 0
@@ -88,9 +105,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const tryGetData = () => {
       const data = getJobData()
       attempts++
-
       const hasData = data.jobTitle || data.company || data.location
-
       if (hasData || attempts >= maxAttempts) {
         sendResponse(data)
       } else {
@@ -99,6 +114,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     tryGetData()
+    return true
+  }
+
+  if (request.action === "getJobDescription") {
+    sendResponse({ jobDescription: getJobDescription() })
     return true
   }
 })

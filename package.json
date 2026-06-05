@@ -1,7 +1,7 @@
 {
   "name": "job-tracker-extension",
   "displayName": "Job tracker extension",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "Save LinkedIn job listings to job-tracker.in in one click. Auto-fills job title, company, and location.",
   "author": "krkzero9",
   "scripts": {
