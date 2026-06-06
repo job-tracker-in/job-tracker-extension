@@ -2,58 +2,70 @@ export const config = {
   matches: ["https://www.linkedin.com/*"]
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Job context ───────────────────────────────────────────────────────────────
+// Find the heading whose ancestor also contains a /company/ link — this
+// guarantees we have the right detail panel, not a random h1 elsewhere.
 
-function getJobTitleEl(): HTMLElement | null {
-  return Array.from(document.querySelectorAll<HTMLElement>("h1"))
-    .find(el => !el.closest("header, nav, [role='banner']")) ?? null
+interface JobContext {
+  titleEl: HTMLElement
+  container: Element
 }
 
-// Walk up from h1 until the container is wide enough to hold job metadata
-// but not so large it spans the whole page. Stops at depth 6.
-function getJobHeaderContainer(): Element | null {
-  const h1 = getJobTitleEl()
-  if (!h1) return null
+let _ctx: JobContext | null | undefined = undefined
 
-  let el: Element | null = h1
-  for (let i = 0; i < 6; i++) {
-    const parent = el?.parentElement
-    if (!parent) break
-    el = parent
-    // Stop when we have at least 3 child elements (title + company + location)
-    if (el.children.length >= 3) return el
+function clearCtx() {
+  _ctx = undefined
+}
+
+function getCtx(): JobContext | null {
+  if (_ctx !== undefined) return _ctx
+
+  for (const tag of ["h1", "h2"] as const) {
+    for (const el of document.querySelectorAll<HTMLElement>(tag)) {
+      if (el.closest("header, nav, [role='banner']")) continue
+      const text = el.textContent?.trim() || ""
+      if (text.length < 2 || text.length > 200) continue
+
+      // Walk up until we find an ancestor that also holds a company link
+      let container: Element | null = el
+      for (let i = 0; i < 10; i++) {
+        container = container?.parentElement ?? null
+        if (!container || container === document.body) break
+        if (container.querySelector('a[href*="/company/"]')) {
+          _ctx = { titleEl: el, container }
+          return _ctx
+        }
+      }
+    }
   }
-  return el
+
+  _ctx = null
+  return null
 }
 
-// ── Scrapers ─────────────────────────────────────────────────────────────────
+// ── Scrapers ──────────────────────────────────────────────────────────────────
 
 function getJobTitle(): string {
-  return getJobTitleEl()?.textContent?.trim().replace(/\s+/g, " ") || ""
+  return getCtx()?.titleEl.textContent?.trim().replace(/\s+/g, " ") || ""
 }
 
 function getCompany(): string {
-  const container = getJobHeaderContainer()
-
-  // Prefer a /company/ link scoped to the header area
-  if (container) {
-    const link = container.querySelector<HTMLAnchorElement>('a[href*="/company/"]')
+  const ctx = getCtx()
+  if (ctx) {
+    const link = ctx.container.querySelector<HTMLAnchorElement>('a[href*="/company/"]')
     if (link?.textContent?.trim()) return link.textContent.trim()
   }
-
-  // Page-wide fallback — still better than class names
-  const link = document.querySelector<HTMLAnchorElement>('a[href*="/company/"]')
-  return link?.textContent?.trim() || ""
+  // Page-wide fallback
+  return document.querySelector<HTMLAnchorElement>('a[href*="/company/"]')?.textContent?.trim() || ""
 }
 
 function getLocation(): string {
   const locationPattern = /\b(remote|hybrid|on.?site)\b|[\p{L}\s][\p{L}\s]+,\s*[\p{L}]/iu
 
-  // Prefer searching within the header container — avoids false hits from JD text
-  const container = getJobHeaderContainer()
+  const container = getCtx()?.container
   if (container) {
     const candidates = Array.from(container.querySelectorAll("span, li, div"))
-      .filter(el => !el.querySelector("h1") && !el.querySelector("a"))
+      .filter(el => !el.querySelector("h1, h2") && !el.querySelector("a"))
       .map(el => el.textContent?.trim() || "")
       .filter(t => t.length > 3 && t.length < 80 && locationPattern.test(t))
 
@@ -130,7 +142,7 @@ function getJobDescription(): string {
   return sections[0]?.text.replace(/\s+/g, " ").substring(0, 3000) || ""
 }
 
-// ── SPA navigation detection ─────────────────────────────────────────────────
+// ── SPA navigation detection ──────────────────────────────────────────────────
 
 let lastUrl = location.href
 let lastJobId = new URLSearchParams(location.search).get("currentJobId")
@@ -142,6 +154,7 @@ function onUrlChange() {
   if (currentUrl !== lastUrl || currentJobId !== lastJobId) {
     lastUrl = currentUrl
     lastJobId = currentJobId
+    clearCtx()
     chrome.runtime.sendMessage({ action: "urlChanged", url: currentUrl }).catch(() => {})
   }
 }
@@ -161,12 +174,13 @@ history.replaceState = function (...args) {
 
 window.addEventListener("popstate", onUrlChange)
 
-// ── Message handlers ─────────────────────────────────────────────────────────
+// ── Message handlers ──────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "getJobData") {
     let attempts = 0
     const tryGetData = () => {
+      clearCtx()
       const data = getJobData()
       attempts++
       const hasData = data.jobTitle || data.company
