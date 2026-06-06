@@ -3,8 +3,7 @@ export const config = {
 }
 
 // ── Job context ───────────────────────────────────────────────────────────────
-// Find the heading whose ancestor also contains a /company/ link — this
-// guarantees we have the right detail panel, not a random h1 elsewhere.
+// Find the heading + its containing panel without relying on company link presence.
 
 interface JobContext {
   titleEl: HTMLElement
@@ -26,12 +25,17 @@ function getCtx(): JobContext | null {
       const text = el.textContent?.trim() || ""
       if (text.length < 2 || text.length > 200) continue
 
-      // Walk up until we find an ancestor that also holds a company link
+      // Walk up until the container has multiple children or a company link —
+      // whichever comes first — but never go past <main>.
       let container: Element | null = el
       for (let i = 0; i < 10; i++) {
         container = container?.parentElement ?? null
-        if (!container || container === document.body) break
-        if (container.querySelector('a[href*="/company/"]')) {
+        if (!container || container.tagName === "MAIN" || container === document.body) break
+
+        const hasCompanyLink = !!container.querySelector('a[href*="/company/"]')
+        const hasEnoughChildren = container.children.length >= 3
+
+        if (hasCompanyLink || (i >= 2 && hasEnoughChildren)) {
           _ctx = { titleEl: el, container }
           return _ctx
         }
@@ -49,24 +53,46 @@ function getJobTitle(): string {
   return getCtx()?.titleEl.textContent?.trim().replace(/\s+/g, " ") || ""
 }
 
-// Company name links are short and don't contain action words
-function isCompanyNameText(text: string): boolean {
-  return (
-    text.length > 0 &&
-    text.length < 80 &&
-    !/\b(jobs|follow|connect|see all|view|visit|about|message|report)\b/i.test(text)
-  )
-}
-
 function getCompany(): string {
   const ctx = getCtx()
-  const scope = ctx?.container ?? document
+  if (!ctx) return ""
 
-  const match = Array.from(scope.querySelectorAll<HTMLAnchorElement>('a[href*="/company/"]'))
+  const { titleEl, container } = ctx
+  const titleText = titleEl.textContent?.trim() || ""
+
+  // 1. Company link — skip purely-action text (whole string match only)
+  const actionRe = /^(follow|connect|message|see all jobs?|view profile|visit|about this company|report this job)$/i
+  const countRe = /^\d[\d,.]*\s+(jobs?|followers?|employees?)/i
+
+  const linkMatch = Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href*="/company/"]'))
     .map(a => a.textContent?.trim() || "")
-    .find(isCompanyNameText)
+    .find(t => t.length > 0 && t.length < 80 && !actionRe.test(t) && !countRe.test(t))
 
-  return match || ""
+  if (linkMatch) return linkMatch
+
+  // 2. Plain text fallback — walk text nodes inside the container.
+  //    Company name is typically the first short text that is not the title,
+  //    not a location, and not metadata noise.
+  const locationRe = /\b(remote|hybrid|on.?site)\b|[\p{L}][\p{L}\s\-]+,\s*[\p{L}]/iu
+  const metaRe = /\d+\s*(applicant|follower|employee|hour|day|week|month|year|minute)|\b(apply|easy apply|save|share|promoted|reposted|actively recruiting)\b/i
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let node: Node | null
+  while ((node = walker.nextNode())) {
+    const t = node.textContent?.trim() || ""
+    if (
+      t.length > 1 &&
+      t.length < 80 &&
+      t !== titleText &&
+      !locationRe.test(t) &&
+      !metaRe.test(t) &&
+      !(node.parentElement?.closest("h1, h2, button, [role='button']"))
+    ) {
+      return t
+    }
+  }
+
+  return ""
 }
 
 function getLocation(): string {
