@@ -49,14 +49,24 @@ function getJobTitle(): string {
   return getCtx()?.titleEl.textContent?.trim().replace(/\s+/g, " ") || ""
 }
 
+// Company name links are short and don't contain action words
+function isCompanyNameText(text: string): boolean {
+  return (
+    text.length > 0 &&
+    text.length < 80 &&
+    !/\b(jobs|follow|connect|see all|view|visit|about|message|report)\b/i.test(text)
+  )
+}
+
 function getCompany(): string {
   const ctx = getCtx()
-  if (ctx) {
-    const link = ctx.container.querySelector<HTMLAnchorElement>('a[href*="/company/"]')
-    if (link?.textContent?.trim()) return link.textContent.trim()
-  }
-  // Page-wide fallback
-  return document.querySelector<HTMLAnchorElement>('a[href*="/company/"]')?.textContent?.trim() || ""
+  const scope = ctx?.container ?? document
+
+  const match = Array.from(scope.querySelectorAll<HTMLAnchorElement>('a[href*="/company/"]'))
+    .map(a => a.textContent?.trim() || "")
+    .find(isCompanyNameText)
+
+  return match || ""
 }
 
 function getLocation(): string {
