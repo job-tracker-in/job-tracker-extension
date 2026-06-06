@@ -29,7 +29,9 @@ export default function Popup() {
       const tab = tabs[0]
       const url = tab.url || ""
       setCurrentUrl(url)
-      setIsLinkedIn(url.includes("linkedin.com/jobs"))
+      const onJobPage = url.includes("linkedin.com/jobs") ||
+                        (url.includes("linkedin.com") && url.includes("currentJobId"))
+      setIsLinkedIn(onJobPage)
       setActiveTabId(tab.id ?? null)
 
       chrome.runtime.sendMessage({ action: "getSession" }, (res) => {
@@ -37,20 +39,24 @@ export default function Popup() {
       })
 
       if (url.includes("linkedin.com")) {
-        chrome.tabs.sendMessage(tab.id!, { action: "getJobData" }, (response) => {
-          if (chrome.runtime.lastError || !response) return
-          setJobData((prev) => ({
-            ...prev,
-            jobTitle: response.jobTitle || "",
-            company: response.company || "",
-            location: response.location || "",
-            salary: response.salary || "",
-            recruiterName: response.recruiterName || "",
-          }))
-        })
+        scrapeJobData(tab.id!)
       }
     })
   }, [])
+
+  const scrapeJobData = (tabId: number) => {
+    chrome.tabs.sendMessage(tabId, { action: "getJobData" }, (response) => {
+      if (chrome.runtime.lastError || !response) return
+      setJobData((prev) => ({
+        ...prev,
+        jobTitle: response.jobTitle || "",
+        company: response.company || "",
+        location: response.location || "",
+        salary: response.salary || "",
+        recruiterName: response.recruiterName || "",
+      }))
+    })
+  }
 
   const getJobDescription = (): Promise<string> => {
     return new Promise((resolve) => {
