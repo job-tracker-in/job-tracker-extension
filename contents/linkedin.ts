@@ -171,7 +171,7 @@ function getRecruiterName(): string {
     document.querySelector("[aria-label*='poster']") ||
     document.querySelector("[data-test*='recruiter']") ||
     Array.from(document.querySelectorAll("section, div")).find(el =>
-      /meet.*hiring team|hiring team/i.test(el.textContent || "")
+      /meet.*hiring team|hiring team|people you can reach out to/i.test(el.textContent || "")
     )
 
   if (!hiringSection) return ""
