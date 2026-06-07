@@ -176,14 +176,10 @@ function getRecruiterName(): string {
 
   if (!hiringSection) return ""
 
-  const name = Array.from(hiringSection.querySelectorAll("span, a"))
-    .map(el => el.textContent?.trim() || "")
-    .find(t =>
-      t.length > 3 &&
-      t.length < 60 &&
-      t.includes(" ") &&                    // names have at least two words
-      !/connect|message|follow|view|skip|search|report|share|save|home|jobs|network|notifications|premium|hiring/i.test(t)
-    )
+  // Recruiter names are always linked to their /in/ profile — nav links never are
+  const name = Array.from(hiringSection.querySelectorAll<HTMLAnchorElement>('a[href*="/in/"]'))
+    .map(a => a.textContent?.trim() || "")
+    .find(t => t.length > 2 && t.length < 60)
 
   return name || ""
 }
