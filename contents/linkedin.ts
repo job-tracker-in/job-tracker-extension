@@ -176,10 +176,15 @@ function getRecruiterName(): string {
 
   if (!hiringSection) return ""
 
-  // Recruiter names are always linked to their /in/ profile — nav links never are
-  const name = Array.from(hiringSection.querySelectorAll<HTMLAnchorElement>('a[href*="/in/"]'))
-    .map(a => a.textContent?.trim() || "")
-    .find(t => t.length > 2 && t.length < 60)
+  // Recruiter names are always linked to their /in/ profile — nav links never are.
+  // Take the shortest match: the outer card link bundles name + degree + role
+  // (e.g. "Dmytro Pryimachuk • 3rd+IT-Developer") while the inner name link
+  // contains just the name. Filtering out "•" and sorting by length picks the right one.
+  const candidates = Array.from(hiringSection.querySelectorAll<HTMLAnchorElement>('a[href*="/in/"]'))
+    .map(a => a.textContent?.trim().replace(/\s+/g, " ") || "")
+    .filter(t => t.length > 2 && t.length < 60 && !t.includes("•"))
+    .sort((a, b) => a.length - b.length)
+  const name = candidates[0]
 
   return name || ""
 }
