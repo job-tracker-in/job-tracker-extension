@@ -130,6 +130,14 @@ function getCompany(): string {
   return ""
 }
 
+function cleanLocation(raw: string): string {
+  // Strip company-name prefix like "Acme GmbH • Berlin, Germany" → "Berlin, Germany"
+  const parts = raw.replace(/\s+/g, " ").split(/\s*[•·]\s*/)
+  const locationPattern = /\b(remote|hybrid|on.?site)\b|[\p{L}][\p{L}\s]+,\s*[\p{L}]/iu
+  const loc = parts.find(p => locationPattern.test(p)) ?? parts[parts.length - 1]
+  return loc.split("(")[0].trim()
+}
+
 function getLocation(): string {
   const locationPattern = /\b(remote|hybrid|on.?site)\b|[\p{L}\s][\p{L}\s]+,\s*[\p{L}]/iu
 
@@ -141,7 +149,7 @@ function getLocation(): string {
       .filter(t => t.length > 3 && t.length < 80 && locationPattern.test(t))
 
     if (candidates.length > 0) {
-      return candidates[0].replace(/\s+/g, " ").split("·")[0].split("(")[0].trim()
+      return cleanLocation(candidates[0])
     }
   }
 
@@ -151,7 +159,7 @@ function getLocation(): string {
     .map(el => el.textContent?.trim() || "")
     .filter(t => t.length > 3 && t.length < 120 && locationPattern.test(t))
 
-  return (candidates[0] || "").replace(/\s+/g, " ").split("·")[0].split("(")[0].trim()
+  return cleanLocation(candidates[0] || "")
 }
 
 function getSalary(): string {
@@ -165,28 +173,43 @@ function getSalary(): string {
   return candidates[0]?.replace(/\s+/g, " ").trim() || ""
 }
 
-function getRecruiterName(): string {
-  const hiringSection =
-    document.querySelector("[aria-label*='hiring']") ||
-    document.querySelector("[aria-label*='poster']") ||
-    document.querySelector("[data-test*='recruiter']") ||
-    Array.from(document.querySelectorAll("section, div")).find(el =>
-      /meet.*hiring team|hiring team|people you can reach out to/i.test(el.textContent || "")
-    )
-
-  if (!hiringSection) return ""
-
-  // Recruiter names are always linked to their /in/ profile — nav links never are.
-  // Take the shortest match: the outer card link bundles name + degree + role
-  // (e.g. "Dmytro Pryimachuk • 3rd+IT-Developer") while the inner name link
-  // contains just the name. Filtering out "•" and sorting by length picks the right one.
-  const candidates = Array.from(hiringSection.querySelectorAll<HTMLAnchorElement>('a[href*="/in/"]'))
+function getNameFromInLink(container: Element): string {
+  const candidates = Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href*="/in/"]'))
     .map(a => a.textContent?.trim().replace(/\s+/g, " ") || "")
     .filter(t => t.length > 2 && t.length < 60 && !t.includes("•"))
     .sort((a, b) => a.length - b.length)
-  const name = candidates[0]
+  return candidates[0] || ""
+}
 
-  return name || ""
+function getRecruiterName(): string {
+  // Strategy 1: find the "Job poster" label — most specific signal.
+  // Walk up from it to the card, then get the /in/ link name.
+  const jobPosterEl = Array.from(document.querySelectorAll("p, span"))
+    .find(el => /^job poster$/i.test(el.textContent?.trim() || ""))
+
+  if (jobPosterEl) {
+    let el: Element | null = jobPosterEl
+    for (let i = 0; i < 6; i++) {
+      el = el?.parentElement ?? null
+      if (!el) break
+      const name = getNameFromInLink(el)
+      if (name) return name
+    }
+  }
+
+  // Strategy 2: "Meet the hiring team" section (before "People you can reach out to")
+  const hiringSection =
+    document.querySelector("[aria-label*='hiring']") ||
+    document.querySelector("[aria-label*='poster']") ||
+    Array.from(document.querySelectorAll("section, div")).find(el =>
+      /\bmeet.*hiring team\b|\bhiring team\b/i.test(el.textContent || "")
+    ) ||
+    Array.from(document.querySelectorAll("section, div")).find(el =>
+      /people you can reach out to/i.test(el.textContent || "")
+    )
+
+  if (!hiringSection) return ""
+  return getNameFromInLink(hiringSection)
 }
 
 function getJobData() {
