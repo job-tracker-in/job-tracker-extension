@@ -179,9 +179,10 @@ function getRecruiterName(): string {
   const name = Array.from(hiringSection.querySelectorAll("span, a"))
     .map(el => el.textContent?.trim() || "")
     .find(t =>
-      t.length > 2 &&
+      t.length > 3 &&
       t.length < 60 &&
-      !/connect|message|follow|view|skip|search|report|share|save/i.test(t)
+      t.includes(" ") &&                    // names have at least two words
+      !/connect|message|follow|view|skip|search|report|share|save|home|jobs|network|notifications|premium|hiring/i.test(t)
     )
 
   return name || ""
