@@ -160,7 +160,7 @@ function getSalary(): string {
 
   const candidates = Array.from(document.querySelectorAll("span, div, li"))
     .map(el => el.textContent?.trim() || "")
-    .filter(t => t.length > 0 && t.length < 200 && salaryPattern.test(t))
+    .filter(t => t.length > 0 && t.length < 80 && salaryPattern.test(t))
 
   return candidates[0]?.replace(/\s+/g, " ").trim() || ""
 }
