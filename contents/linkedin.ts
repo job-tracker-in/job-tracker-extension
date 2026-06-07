@@ -181,7 +181,7 @@ function getRecruiterName(): string {
     .find(t =>
       t.length > 2 &&
       t.length < 60 &&
-      !/connect|message|follow|view/i.test(t)
+      !/connect|message|follow|view|skip|search|report|share|save/i.test(t)
     )
 
   return name || ""
