@@ -19,14 +19,38 @@ function clearCtx() {
 function getCtx(): JobContext | null {
   if (_ctx !== undefined) return _ctx
 
+  // Priority 1: use currentJobId to anchor directly to the detail panel.
+  // LinkedIn always puts a /jobs/view/{id} link in the detail panel header —
+  // this is far more reliable than scanning for h1/h2 on pages that have
+  // unrelated headings like "Top job picks for you" on collections pages.
+  const jobId = new URLSearchParams(location.search).get("currentJobId")
+  if (jobId) {
+    const jobLink = document.querySelector<HTMLAnchorElement>(`a[href*="/jobs/view/${jobId}"]`)
+    if (jobLink) {
+      let container: Element | null = jobLink
+      for (let i = 0; i < 10; i++) {
+        container = container?.parentElement ?? null
+        if (!container || container === document.body) break
+        if (container.querySelector('a[href*="/company/"]')) {
+          const heading =
+            container.querySelector<HTMLElement>("h1, h2") ??
+            (jobLink as unknown as HTMLElement)
+          if (heading.textContent?.trim()) {
+            _ctx = { titleEl: heading, container }
+            return _ctx
+          }
+        }
+      }
+    }
+  }
+
+  // Priority 2: direct job view pages — h1/h2 with a company link in its ancestor
   for (const tag of ["h1", "h2"] as const) {
     for (const el of document.querySelectorAll<HTMLElement>(tag)) {
       if (el.closest("header, nav, [role='banner']")) continue
       const text = el.textContent?.trim() || ""
       if (text.length < 2 || text.length > 200) continue
 
-      // Walk up until the container has multiple children or a company link —
-      // whichever comes first — but never go past <main>.
       let container: Element | null = el
       for (let i = 0; i < 10; i++) {
         container = container?.parentElement ?? null
