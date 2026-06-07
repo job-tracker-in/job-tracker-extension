@@ -25,18 +25,29 @@ function getCtx(): JobContext | null {
   // unrelated headings like "Top job picks for you" on collections pages.
   const jobId = new URLSearchParams(location.search).get("currentJobId")
   if (jobId) {
-    const jobLink = document.querySelector<HTMLAnchorElement>(`a[href*="/jobs/view/${jobId}"]`)
-    if (jobLink) {
-      let container: Element | null = jobLink
-      for (let i = 0; i < 10; i++) {
-        container = container?.parentElement ?? null
-        if (!container || container === document.body) break
-        if (container.querySelector('a[href*="/company/"]')) {
-          const heading =
-            container.querySelector<HTMLElement>("h1, h2") ??
-            (jobLink as unknown as HTMLElement)
-          if (heading.textContent?.trim()) {
-            _ctx = { titleEl: heading, container }
+    // The left-panel job list also contains /jobs/view/{id} links for the
+    // selected job — those are inside <li> elements. The detail panel link
+    // is NOT inside a list item, so skip anything inside <li>.
+    const allJobLinks = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>(`a[href*="/jobs/view/${jobId}"]`)
+    )
+    const detailLink = allJobLinks.find(a => !a.closest("li")) ?? allJobLinks[0]
+
+    if (detailLink) {
+      // Title: walk UP from the link — the link is either wrapped in an h1/h2
+      // or its own text IS the title. Never use container.querySelector("h1")
+      // which can match unrelated headings like "About CompanyName".
+      const titleEl: HTMLElement =
+        detailLink.closest<HTMLElement>("h1, h2") ??
+        (detailLink as unknown as HTMLElement)
+
+      if (titleEl.textContent?.trim()) {
+        let container: Element | null = titleEl
+        for (let i = 0; i < 10; i++) {
+          container = container?.parentElement ?? null
+          if (!container || container === document.body) break
+          if (container.querySelector('a[href*="/company/"]')) {
+            _ctx = { titleEl, container }
             return _ctx
           }
         }
