@@ -139,27 +139,53 @@ function cleanLocation(raw: string): string {
 }
 
 function getLocation(): string {
-  const locationPattern = /\b(remote|hybrid|on.?site)\b|[\p{L}\s][\p{L}\s]+,\s*[\p{L}]/iu
-
   const container = getCtx()?.container
+  const searchRoot = container || document.querySelector("main") || document.body
+
+  // Strategy 1: LinkedIn subtitle pattern "Location · N days/months ago [· N applied]"
+  // Handles locations without a comma, e.g. "Greater Munich Metropolitan Area"
+  for (const el of searchRoot.querySelectorAll<HTMLElement>("span, div, li")) {
+    if (el.querySelector("h1, h2, a")) continue
+    const text = el.textContent?.trim() || ""
+    if (/[·•]\s*\d+\s*(month|day|week|hour|minute|year)s?\s+ago/i.test(text)) {
+      const locationPart = text.split(/\s*[·•]\s*/)[0].trim()
+      if (locationPart.length > 2 && locationPart.length < 80) {
+        return cleanLocation(locationPart)
+      }
+    }
+  }
+
+  // Strategy 2: pattern match — prefer geographic "City, Country" over bare keyword
+  const locationPattern = /\b(remote|hybrid|on.?site)\b|[\p{L}\s][\p{L}\s]+,\s*[\p{L}]/iu
+  const geoPattern = /[\p{L}][\p{L}\s]+,\s*[\p{L}]/iu
+  const parenWorkplace = /\(\s*(remote|hybrid|on.?site)\s*\)/i
+
+  function bestCandidate(list: string[]): string {
+    // Priority: geographic (comma) > location with workplace in parens > bare keyword
+    return (
+      list.find(t => geoPattern.test(t)) ||
+      list.find(t => parenWorkplace.test(t)) ||
+      list[0] ||
+      ""
+    )
+  }
+
   if (container) {
     const candidates = Array.from(container.querySelectorAll("span, li, div"))
       .filter(el => !el.querySelector("h1, h2") && !el.querySelector("a"))
       .map(el => el.textContent?.trim() || "")
       .filter(t => t.length > 3 && t.length < 80 && locationPattern.test(t))
 
-    if (candidates.length > 0) {
-      return cleanLocation(candidates[0])
-    }
+    const best = bestCandidate(candidates)
+    if (best) return cleanLocation(best)
   }
 
-  // Fallback: broader scan of main content
   const panel = document.querySelector("main") || document.body
   const candidates = Array.from(panel.querySelectorAll("span, li"))
     .map(el => el.textContent?.trim() || "")
     .filter(t => t.length > 3 && t.length < 120 && locationPattern.test(t))
 
-  return cleanLocation(candidates[0] || "")
+  return cleanLocation(bestCandidate(candidates))
 }
 
 function getSalary(): string {
@@ -197,19 +223,35 @@ function getRecruiterName(): string {
     }
   }
 
-  // Strategy 2: "Meet the hiring team" section (before "People you can reach out to")
-  const hiringSection =
-    document.querySelector("[aria-label*='hiring']") ||
-    document.querySelector("[aria-label*='poster']") ||
-    Array.from(document.querySelectorAll("section, div")).find(el =>
-      /\bmeet.*hiring team\b|\bhiring team\b/i.test(el.textContent || "")
-    ) ||
-    Array.from(document.querySelectorAll("section, div")).find(el =>
-      /people you can reach out to/i.test(el.textContent || "")
-    )
+  // Strategy 2: find the "Meet the hiring team" heading element directly,
+  // then search its parent — avoids matching large ancestor containers
+  // that contain the text somewhere in their descendants.
+  const headingEl = Array.from(document.querySelectorAll("p, h2, h3, span"))
+    .find(el => /^meet\s+(the\s+)?hiring\s+team$/i.test(el.textContent?.trim() || ""))
 
-  if (!hiringSection) return ""
-  return getNameFromInLink(hiringSection)
+  if (headingEl?.parentElement) {
+    const name = getNameFromInLink(headingEl.parentElement)
+    if (name) return name
+    // Heading parent may be a one-level wrapper — try grandparent too
+    const grandparent = headingEl.parentElement.parentElement
+    if (grandparent) {
+      const name2 = getNameFromInLink(grandparent)
+      if (name2) return name2
+    }
+  }
+
+  // Strategy 3: "People you can reach out to" — same tight-heading approach
+  const reachHeadingEl = Array.from(document.querySelectorAll("p, h2, h3, span"))
+    .find(el => /^people you can reach out to$/i.test(el.textContent?.trim() || ""))
+
+  if (reachHeadingEl?.parentElement) {
+    const name = getNameFromInLink(reachHeadingEl.parentElement)
+    if (name) return name
+    const grandparent = reachHeadingEl.parentElement.parentElement
+    if (grandparent) return getNameFromInLink(grandparent)
+  }
+
+  return ""
 }
 
 function getJobData() {

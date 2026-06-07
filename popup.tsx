@@ -23,6 +23,8 @@ export default function Popup() {
   const [activeTabId, setActiveTabId] = useState<number | null>(null)
   const [applicationId, setApplicationId] = useState<string | null>(null)
   const [wantCoverLetter, setWantCoverLetter] = useState(true)
+  const [jdSummary, setJdSummary] = useState<string[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
 
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -165,6 +167,41 @@ export default function Popup() {
     }
   }
 
+  const handleSummarise = async () => {
+    setSummaryLoading(true)
+    setJdSummary([])
+    try {
+      const sessionResult = await new Promise<any>((resolve) => {
+        chrome.runtime.sendMessage({ action: "getSession" }, resolve)
+      })
+      if (!sessionResult?.accessToken) {
+        setSummaryLoading(false)
+        return
+      }
+      const jobDescription = await getJobDescription()
+      if (!jobDescription) {
+        setJdSummary(["No job description found on this page."])
+        setSummaryLoading(false)
+        return
+      }
+      const res = await fetch("https://api.job-tracker.in/api/v1/jd/summarise", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionResult.accessToken}`,
+        },
+        body: JSON.stringify({ jobDescription }),
+      })
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = await res.json()
+      setJdSummary(data.bullets || [])
+    } catch (err: any) {
+      setJdSummary([`Failed to summarise: ${err.message}`])
+    } finally {
+      setSummaryLoading(false)
+    }
+  }
+
   const handleRegenerate = async () => {
     const sessionResult = await new Promise<any>((resolve) => {
       chrome.runtime.sendMessage({ action: "getSession" }, resolve)
@@ -302,7 +339,46 @@ export default function Popup() {
         </div>
       )}
 
-      <p style={sectionLabel}>Job Details</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, marginBottom: 6 }}>
+        <p style={{ ...sectionLabel, margin: 0 }}>Job Details</p>
+        {isLinkedIn && (
+          <button
+            onClick={handleSummarise}
+            disabled={summaryLoading}
+            style={{
+              fontSize: 11,
+              padding: "3px 8px",
+              backgroundColor: summaryLoading ? "#e9d5ff" : "#f3e8ff",
+              color: "#7c3aed",
+              border: "1px solid #d8b4fe",
+              borderRadius: 5,
+              cursor: summaryLoading ? "not-allowed" : "pointer",
+              fontWeight: "bold",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {summaryLoading ? "⏳ Summarising..." : "✨ Summarise JD"}
+          </button>
+        )}
+      </div>
+
+      {jdSummary.length > 0 && (
+        <div style={{
+          background: "#f5f3ff",
+          border: "1px solid #ddd6fe",
+          borderRadius: 6,
+          padding: "8px 10px",
+          marginBottom: 8,
+        }}>
+          {jdSummary.map((bullet, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, marginBottom: i < jdSummary.length - 1 ? 5 : 0 }}>
+              <span style={{ color: "#7c3aed", fontWeight: "bold", flexShrink: 0 }}>•</span>
+              <span style={{ fontSize: 11, color: "#374151", lineHeight: "1.5" }}>{bullet}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <input style={inputStyle} placeholder="Job Title"
         value={jobData.jobTitle}
         onChange={(e) => setJobData({ ...jobData, jobTitle: e.target.value })} />
