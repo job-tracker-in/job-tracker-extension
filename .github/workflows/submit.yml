@@ -20,9 +20,9 @@ jobs:
         run: cd build/chrome-mv3-prod && zip -r ../chrome-mv3-prod.zip .
       - name: Upload to Chrome Web Store
         env:
-          CLIENT_ID: ${{ fromJson(secrets.SUBMIT_KEYS).chrome.clientId }}
-          CLIENT_SECRET: ${{ fromJson(secrets.SUBMIT_KEYS).chrome.clientSecret }}
-          REFRESH_TOKEN: ${{ fromJson(secrets.SUBMIT_KEYS).chrome.refreshToken }}
-          EXTENSION_ID: ${{ fromJson(secrets.SUBMIT_KEYS).chrome.extId }}
+          CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
           PUBLISHER_ID: e7af1311-0d51-4cfc-86d4-30d56516f806
         run: npx --yes chrome-webstore-upload-cli@latest upload --source build/chrome-mv3-prod.zip --extension-id $EXTENSION_ID --auto-publish
