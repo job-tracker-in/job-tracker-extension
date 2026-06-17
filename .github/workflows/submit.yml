@@ -18,6 +18,13 @@ jobs:
         run: npm run build
       - name: Package the extension
         run: cd build && zip -r chrome-mv3-prod.zip chrome-mv3-prod/
+      - name: Check keys secret
+        env:
+          SUBMIT_KEYS: ${{ secrets.SUBMIT_KEYS }}
+        run: |
+          echo "Secret length: ${#SUBMIT_KEYS}"
+          printf '%s' "$SUBMIT_KEYS" > /tmp/keys.json
+          node -e "const k=require('fs').readFileSync('/tmp/keys.json','utf8'); JSON.parse(k); console.log('JSON valid, length:', k.length)"
       - name: Browser Platform Publish
         uses: PlasmoHQ/bpp@v3
         with:
