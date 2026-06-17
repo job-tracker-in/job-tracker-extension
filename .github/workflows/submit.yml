@@ -17,7 +17,7 @@ jobs:
       - name: Build the extension
         run: npm run build
       - name: Package the extension
-        run: cd build && zip -r chrome-mv3-prod.zip chrome-mv3-prod/
+        run: cd build/chrome-mv3-prod && zip -r ../chrome-mv3-prod.zip .
       - name: Upload to Chrome Web Store
         env:
           CLIENT_ID: ${{ fromJson(secrets.SUBMIT_KEYS).chrome.clientId }}
